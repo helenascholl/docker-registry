@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set hostname
+        run: |
+          cp template.env .env
+          sed -i 's/example.com/${{ secrets.REGISTRY_HOSTNAME }}/g' .env
+      - name: Create users
+        run: |
+          USERS=""
+
+          while read LINE; do
+            readarray -d : -t SECRET <<< "$LINE"
+            USERS="${USERS}$(htpasswd -nbB ${SECRET[0]} ${SECRET[1]}),"
+          done <<< ${{ secrets.AUTH_USERS }}
+
+          sed -i 's/user:password/${USERS::-1}/g' .env
+      - name: Deploy to server
+        uses: easingthemes/ssh-deploy@v2.1.6
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SOURCE: ./
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          TARGET: ${{ secrets.REMOTE_TARGET }}
+          EXCLUDE: /.git/
+      - name: Start Docker container
+        uses: garygrossgarten/github-action-ssh@v0.6.3
+        with:
+          command: |
+            cd ${{ secrets.REMOTE_TARGET }}
+            docker-compose down
+            docker-compose build
+            docker-compose up -d
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          privateKey: ${{ secrets.SSH_PRIVATE_KEY}}
