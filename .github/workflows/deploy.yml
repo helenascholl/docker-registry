@@ -24,6 +24,8 @@ jobs:
           done <<< ${{ secrets.AUTH_USERS }}
 
           sed -i 's/user:password/${USERS::-1}/g' .env
+          echo "$USERS"
+          echo "${USERS::-1}"
       - name: Deploy to server
         uses: easingthemes/ssh-deploy@v2.1.6
         env:
